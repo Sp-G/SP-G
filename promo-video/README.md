@@ -3,30 +3,21 @@
 Вертикальное видео 1080×1920, 30 fps, ~60 с, русская озвучка, фоновая музыка и инфографика.
 Собрано на [Remotion](https://www.remotion.dev) (React → видео).
 
-## Сценарий
+## Сценарий (~31 с)
 
-| # | Сцена | Озвучка |
-|---|-------|---------|
-| 1 | Хук: календарь чеков → «1× в месяц» | Кофе каждый день — это дорого. А что, если платить за него один раз в месяц? |
-| 2 | Логотип + приложение | Знакомься: Coffee Pass. Подписка на кофе в кофейнях‑партнёрах. |
-| 3 | Шаг 1 — тариф 1 490 ₸ | Шаг первый. Оформи подписку — всего 1 490 тенге в месяц. |
-| 4 | Шаг 2 — карта, еда от 1 000 ₸ | Шаг второй. Найди кофейню‑партнёра на карте и закажи еду от 1 000 тенге. |
-| 5 | Шаг 3 — скан чека, напиток 0 ₸ | Шаг третий. Отсканируй чек в приложении — и напиток получаешь бесплатно! |
-| 6 | Монеты, розыгрыш, заморозка | За каждый визит начисляются монеты. Меняй их на заморозку подписки или участвуй в розыгрыше подписки на целый год. |
-| 7 | Друзья: 20% / 50% / 100% | Зови друзей — и получай до ста процентов от цены подписки на бонусный баланс. |
-| 8 | Экономия и окупаемость | А приложение само считает, сколько ты сэкономил. Подписка окупается уже за пару чашек. |
-| 9 | CTA: coffeepass.kz | Coffee Pass. Больше кофе — меньше трат. Подключайся уже сегодня! |
+Хук «Стоп!» → бренд → 3 шага (подписка · еда от 1 000 ₸ · скан чека = кофе бесплатно) → монеты и бонусы за друзей → цена и призыв.
+Тексты фраз и субтитров — `LINES` в `scripts/voiceover.py`. Субтитры подсвечиваются по словам синхронно с голосом.
 
 ## Как пересобрать
 
 ```bash
 npm i
 
-# 1. Озвучка (офлайн-TTS Piper, голос ru_RU «irina»):
-pip install piper-tts
-curl -LO https://github.com/rhasspy/piper/releases/download/v0.0.2/voice-ru-irinia-medium.tar.gz
-tar xzf voice-ru-irinia-medium.tar.gz
-python3 scripts/voiceover.py ./ru-irinia-medium.onnx   # → public/vo/*.mp3 + src/vo-timings.json
+# 1. Озвучка → public/vo/*.mp3, src/vo-timings.json, src/vo-captions.json
+pip install edge-tts
+python3 scripts/voiceover.py --engine edge --voice ru-RU-SvetlanaNeural   # естественный женский голос
+# или ElevenLabs:  ELEVENLABS_API_KEY=... python3 scripts/voiceover.py --engine eleven
+# или офлайн:      python3 scripts/voiceover.py --engine piper --model ./ru-irinia-medium.onnx
 
 # 2. Музыка и звуки (синтез, без лицензий):
 python3 scripts/music.py                               # → public/music.mp3, public/sfx/*.wav
@@ -37,7 +28,6 @@ npx remotion render CoffeePassPromo out/coffeepass-promo.mp4 --crf=18
 ```
 
 Тексты озвучки — в `scripts/voiceover.py`. Длительность сцен подстраивается под длину фраз автоматически.
-Чтобы заменить голос на профессиональный диктор / ElevenLabs — положите свои `public/vo/<сцена>.mp3`
-и обновите длительности в `src/vo-timings.json`.
+
 
 Скриншоты приложения — `public/screens/` (вырезаны из записей экрана).

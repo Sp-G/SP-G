@@ -40,10 +40,10 @@ def epiano(freq, dur):
 
 
 # ---------------- music ----------------
-BPM = 88
+BPM = 116
 beat = 60 / BPM
 bar = 4 * beat
-LENGTH = 66.0
+LENGTH = 36.0
 N = int(LENGTH * SR)
 L = np.zeros(N); R = np.zeros(N)
 
@@ -73,8 +73,6 @@ for b in range(nbars):
     t = np.arange(int(bar * SR)) / SR
     bs = np.sin(2 * np.pi * midi(basses[b % 4]) * t) * np.exp(-t * 0.9) * (1 - np.exp(-t * 80))
     add(L, bs, t0, 0.32); add(R, bs, t0, 0.32)
-    intro = b < 1  # drums enter after the first bar
-    if intro: continue
     for q in range(4):
         tq = t0 + q * beat
         if q in (0, 2) or (q == 3 and b % 2):  # kick
@@ -123,4 +121,10 @@ save(OUT / "sfx" / "coin.wav", coin)
 t = np.arange(int(0.12 * SR)) / SR
 pop = np.sin(2 * np.pi * (900 - 600 * t / t[-1]) * t) * np.exp(-t * 40)
 save(OUT / "sfx" / "pop.wav", pop)
+t = np.arange(int(1.2 * SR)) / SR
+f = 30 + 90 * np.exp(-t * 6)
+boom = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 3.2)
+crack = rng.standard_normal(len(t)) * np.exp(-t * 18)
+save(OUT / "sfx" / "impact.wav", boom + 0.35 * lowpass(crack, 2500))
+
 print("ok")

@@ -7,20 +7,21 @@ import {
   CoinIcon,
   CupIcon,
   ease,
-  Headline,
+  Captions,
   Phone,
   Sfx,
   StepBadge,
   useSpring,
   Voice,
+  wordAt,
 } from "../theme";
 
 const f = 520.8 / 900;
 // scanner viewfinder in phone-screen px
 const VF = { x: 127 * f, y: 316 * f, w: (770 - 127) * f, h: (1300 - 316) * f };
-const SCAN_START = 62;
-const SCAN_END = 104;
-const OK = 110;
+const OK = wordAt("step3", "бесплатно", 100) - 4;
+const SCAN_START = 24;
+const SCAN_END = Math.min(OK - 8, 64);
 
 const Receipt: React.FC = () => (
   <div
@@ -59,8 +60,8 @@ const Receipt: React.FC = () => (
 /** Step 3: scan the receipt — the drink is free. */
 export const Step3: React.FC = () => {
   const frame = useCurrentFrame();
-  const phone = useSpring(4, 16, 1);
-  const receipt = useSpring(30, 15);
+  const phone = useSpring(2, 16, 1);
+  const receipt = useSpring(10, 15);
   const ok = useSpring(OK, 10);
   const scan = ease(frame, [SCAN_START, SCAN_END]);
   const scanning = frame >= SCAN_START && frame < SCAN_END + 4;
@@ -69,11 +70,11 @@ export const Step3: React.FC = () => {
       <Background />
       <Voice id="step3" />
       <Sfx src="whoosh" at={0} volume={0.35} />
-      <Sfx src="whoosh" at={30} volume={0.2} />
+      <Sfx src="whoosh" at={10} volume={0.2} />
       <Sfx src="success" at={OK} volume={0.45} />
-      <Sfx src="coin" at={OK + 30} volume={0.35} />
-      <StepBadge n={3} delay={4} />
-      <Headline text="Сканируй *чек* — / напиток *бесплатно*" top={250} size={88} delay={6} />
+      <Sfx src="coin" at={OK + 22} volume={0.35} />
+      <StepBadge n={3} delay={2} />
+      <Captions id="step3" top={240} size={86} gold={["чек", "бесплатно"]} />
       <Phone src="scanner" y={500 + (1 - phone) * 800}>
         <div
           style={{
@@ -137,7 +138,7 @@ export const Step3: React.FC = () => {
           </svg>
         </div>
       </Phone>
-      <Card delay={OK + 10} style={{ left: 90, right: 90, top: 1330, padding: "30px 40px" }}>
+      <Card delay={OK + 6} style={{ left: 90, right: 90, top: 1330, padding: "30px 40px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
           <CupIcon size={120} />
           <div style={{ flex: 1 }}>
@@ -154,8 +155,8 @@ export const Step3: React.FC = () => {
               padding: "12px 20px",
               borderRadius: 100,
               background: "rgba(127,211,154,0.15)",
-              opacity: ease(frame, [OK + 30, OK + 40]),
-              scale: String(0.6 + 0.4 * ease(frame, [OK + 30, OK + 40])),
+              opacity: ease(frame, [OK + 20, OK + 28]),
+              scale: String(0.6 + 0.4 * ease(frame, [OK + 20, OK + 28])),
             }}
           >
             <CoinIcon size={44} />

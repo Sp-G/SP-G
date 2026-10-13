@@ -1,67 +1,68 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
-import { Background, C, ease, Headline, Logo, Phone, Sfx, useSpring, Voice } from "../theme";
+import { Background, C, Captions, ease, Logo, Phone, Sfx, useSpring, Voice, wordAt } from "../theme";
 
-/** Closing: logo, slogan, call to action. */
+/** Closing: price, logo, call to action. */
 export const Cta: React.FC = () => {
   const frame = useCurrentFrame();
-  const logo = useSpring(4, 12);
-  const btn = useSpring(70, 11);
-  const phoneL = useSpring(20, 16, 1);
-  const phoneR = useSpring(28, 16, 1);
-  const shimmer = ((frame - 80) % 70) / 70;
+  const brandAt = wordAt("cta", "Coffee", 70);
+  const goAt = wordAt("cta", "подключайся", brandAt + 20);
+  const logo = useSpring(brandAt - 2, 9);
+  const btn = useSpring(goAt - 2, 10);
+  const phoneL = useSpring(6, 16, 1);
+  const phoneR = useSpring(12, 16, 1);
+  const shimmer = ((frame - goAt) % 50) / 50;
+  const pulse = 1 + 0.035 * Math.max(0, Math.sin((frame - goAt) / 5)) * (frame > goAt + 10 ? 1 : 0);
   return (
     <AbsoluteFill>
-      <Background glowY={40} />
+      <Background glowY={35} />
       <Voice id="cta" />
       <Sfx src="whoosh" at={0} volume={0.35} />
-      <Sfx src="success" at={70} volume={0.3} />
-      {/* fanned phones in the background */}
-      <div style={{ opacity: 0.55 }}>
-        <Phone src="coins" width={440} x={-60} y={1060 + (1 - phoneL) * 600} rotate={-12} />
-        <Phone src="profile" width={440} x={700} y={1060 + (1 - phoneR) * 600} rotate={12} />
+      <Sfx src="impact" at={brandAt - 2} volume={0.45} />
+      <Sfx src="success" at={goAt} volume={0.35} />
+      <div style={{ opacity: 0.5 }}>
+        <Phone src="coins" width={420} x={-50} y={1180 + (1 - phoneL) * 600} rotate={-12} />
+        <Phone src="profile" width={420} x={710} y={1180 + (1 - phoneR) * 600} rotate={12} />
       </div>
-      <Phone src="home" width={480} y={1000 + (1 - phoneL) * 700} />
+      <Phone src="home" width={460} y={1110 + (1 - phoneL) * 700} />
       <AbsoluteFill
-        style={{
-          background: "linear-gradient(180deg, rgba(20,15,11,0) 55%, rgba(20,15,11,0.85) 100%)",
-        }}
+        style={{ background: "linear-gradient(180deg, rgba(20,15,11,0) 60%, rgba(20,15,11,0.85) 100%)" }}
       />
+      <Captions id="cta" top={150} size={80} gold={["1 490", "Coffee"]} />
       <div
         style={{
           position: "absolute",
-          top: 170,
+          top: 590,
           left: 0,
           right: 0,
           display: "flex",
           justifyContent: "center",
-          scale: String(0.5 + 0.5 * logo),
-          opacity: Math.min(1, logo * 1.5),
+          scale: String(2 - logo),
+          opacity: Math.min(1, logo * 2),
         }}
       >
-        <div style={{ marginRight: 120 }}>
-          <Logo size={140} />
+        <div style={{ marginRight: 110 }}>
+          <Logo size={110} />
         </div>
       </div>
-      <Headline text="Больше кофе — / *меньше трат*" top={490} size={92} delay={22} />
       <div
         style={{
           position: "absolute",
-          top: 760,
+          top: 850,
           left: 140,
           right: 140,
           height: 140,
           borderRadius: 70,
-          background: `linear-gradient(100deg, ${C.gold} ${shimmer * 100 - 20}%, ${C.goldLight} ${shimmer * 100}%, ${C.gold} ${shimmer * 100 + 20}%)`,
+          background: `linear-gradient(100deg, ${C.gold} ${shimmer * 140 - 30}%, ${C.goldLight} ${shimmer * 140 - 10}%, ${C.gold} ${shimmer * 140 + 10}%)`,
           boxShadow: "0 24px 60px rgba(217,167,95,0.45)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontFamily: "Inter Display",
           fontWeight: 900,
-          fontSize: 56,
+          fontSize: 58,
           color: C.bg,
-          scale: String(btn),
+          scale: String(btn * pulse),
         }}
       >
         coffeepass.kz
@@ -69,13 +70,13 @@ export const Cta: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          top: 930,
+          top: 1015,
           left: 0,
           right: 0,
           display: "flex",
           justifyContent: "center",
           gap: 16,
-          opacity: ease(frame, [90, 104]),
+          opacity: ease(frame, [goAt + 8, goAt + 18]),
         }}
       >
         {["KZ", "RU", "EN"].map((l) => (

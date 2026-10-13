@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
-import { Background, C, Card, CupIcon, ease, Headline, Phone, Sfx, StepBadge, useSpring, Voice } from "../theme";
+import { Background, C, Captions, Card, CupIcon, ease, Phone, Sfx, StepBadge, useSpring, Voice, wordAt } from "../theme";
 
 const PINS: [number, number][] = [
   [118, 236],
@@ -54,23 +54,24 @@ const Pin: React.FC<{ x: number; y: number; delay: number }> = ({ x, y, delay })
 /** Step 2: find a partner café on the map and order food from 1 000 ₸. */
 export const Step2: React.FC = () => {
   const frame = useCurrentFrame();
-  const phone = useSpring(4, 16, 1);
+  const phone = useSpring(2, 16, 1);
+  const foodAt = wordAt("step2", "1 000", 50);
   return (
     <AbsoluteFill>
       <Background glowX={60} />
       <Voice id="step2" />
       <Sfx src="whoosh" at={0} volume={0.35} />
       {PINS.map((_, i) => (
-        <Sfx key={i} src="pop" at={34 + i * 7} volume={0.2} />
+        <Sfx key={i} src="pop" at={14 + i * 5} volume={0.2} />
       ))}
-      <StepBadge n={2} delay={4} />
-      <Headline text="Найди кофейню / и закажи *еду*" top={250} size={92} delay={6} />
+      <StepBadge n={2} delay={2} />
+      <Captions id="step2" top={240} size={86} gold={["еду", "1 000"]} />
       <Phone src="map" y={500 + (1 - phone) * 800} zoom={ease(frame, [20, 200], [1, 1.06])} focusY={0.3}>
         {PINS.map(([x, y], i) => (
-          <Pin key={i} x={x} y={y} delay={30 + i * 7} />
+          <Pin key={i} x={x} y={y} delay={12 + i * 5} />
         ))}
       </Phone>
-      <Card delay={95} style={{ left: 90, right: 90, top: 1310, padding: "34px 40px" }}>
+      <Card delay={foodAt - 4} style={{ left: 90, right: 90, top: 1310, padding: "34px 40px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 30 }}>
           <div
             style={{

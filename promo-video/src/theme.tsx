@@ -13,6 +13,7 @@ import {
 } from "remotion";
 import { Audio } from "@remotion/media";
 import timings from "./vo-timings.json";
+import captions from "./vo-captions.json";
 
 const FONT_FILES: [string, string][] = [
   ["Inter-Regular", "400"],
@@ -46,9 +47,9 @@ export const C = {
 };
 
 export const FPS = 30;
-export const TRANSITION = 14;
-const LEAD = 10; // frames of silence before the voice line starts
-const TAIL = 16; // frames held after the voice line ends
+export const TRANSITION = 8;
+const LEAD = 4; // frames before the voice line starts
+const TAIL = 8; // frames held after the voice line ends
 
 export type SceneId = keyof typeof timings;
 export const voFrames = (id: SceneId) => Math.ceil(timings[id] * FPS);
@@ -60,11 +61,9 @@ export const SCENES: { id: SceneId; extra?: number }[] = [
   { id: "intro" },
   { id: "step1" },
   { id: "step2" },
-  { id: "step3", extra: 10 },
-  { id: "coins" },
-  { id: "friends" },
-  { id: "savings" },
-  { id: "cta", extra: 45 },
+  { id: "step3", extra: 6 },
+  { id: "perks" },
+  { id: "cta", extra: 36 },
 ];
 
 export const sceneStarts = () => {
@@ -574,3 +573,65 @@ export const CoinIcon: React.FC<{ size: number }> = ({ size }) => (
     M
   </div>
 );
+
+/**
+ * Voice-synced kinetic captions: each word pops in exactly when it is spoken,
+ * the word being spoken glows gold. Words not yet spoken keep their space so lines never reflow.
+ */
+export const Captions: React.FC<{ id: SceneId; top?: number; size?: number; gold?: string[] }> = ({
+  id,
+  top = 230,
+  size = 92,
+  gold = [],
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const words = (captions as Record<string, { text: string; start: number; end: number }[]>)[id];
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top,
+        left: 70,
+        right: 70,
+        textAlign: "center",
+        fontFamily: "Inter Display",
+        fontWeight: 900,
+        fontSize: size,
+        lineHeight: 1.08,
+        letterSpacing: -1.5,
+        color: C.cream,
+        textShadow: "0 6px 30px rgba(0,0,0,0.55)",
+      }}
+    >
+      {words.map((w, i) => {
+        const at = LEAD + w.start * fps - 2;
+        const end = LEAD + (words[i + 1]?.start ?? w.end + 0.3) * fps - 2;
+        const s = spring({ frame: frame - at, fps, config: { damping: 11, mass: 0.5 } });
+        const active = frame >= at && frame < end;
+        const isGold = gold.some((g) => w.text.toLowerCase().includes(g.toLowerCase()));
+        return (
+          <span
+            key={i}
+            style={{
+              display: frame < at ? "none" : "inline-block",
+              marginRight: size * 0.22,
+              scale: String((0.4 + 0.6 * Math.min(1, s)) * (active ? 1.08 : 1)),
+              translate: `0px ${(1 - Math.min(1, s)) * 30}px`,
+              color: active || isGold ? C.goldLight : C.cream,
+            }}
+          >
+            {w.text}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+/** Frame (scene-relative) at which the first caption word containing `text` is spoken. */
+export const wordAt = (id: SceneId, text: string, fallback = 0) => {
+  const words = (captions as Record<string, { text: string; start: number }[]>)[id];
+  const w = words.find((x) => x.text.toLowerCase().includes(text.toLowerCase()));
+  return w ? Math.round(LEAD + w.start * FPS) : fallback;
+};

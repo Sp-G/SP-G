@@ -10,9 +10,7 @@ import { Intro } from "./scenes/Intro";
 import { Step1 } from "./scenes/Step1";
 import { Step2 } from "./scenes/Step2";
 import { Step3 } from "./scenes/Step3";
-import { Coins } from "./scenes/Coins";
-import { Friends } from "./scenes/Friends";
-import { Savings } from "./scenes/Savings";
+import { Perks } from "./scenes/Perks";
 import { Cta } from "./scenes/Cta";
 
 export const SCENE_COMPONENTS: Record<SceneId, React.FC> = {
@@ -21,15 +19,13 @@ export const SCENE_COMPONENTS: Record<SceneId, React.FC> = {
   step1: Step1,
   step2: Step2,
   step3: Step3,
-  coins: Coins,
-  friends: Friends,
-  savings: Savings,
+  perks: Perks,
   cta: Cta,
 };
 
 const RAMP = 8;
-const MUSIC_LOUD = 0.34;
-const MUSIC_DUCKED = 0.11;
+const MUSIC_LOUD = 0.4;
+const MUSIC_DUCKED = 0.14;
 
 /** Music sits lower while the narrator speaks and swells in the gaps. */
 const musicVolume = (frame: number) => {
@@ -61,7 +57,7 @@ export const Promo: React.FC = () => (
           items.push(
             <TransitionSeries.Transition
               key={`${id}-t`}
-              presentation={i % 3 === 1 ? fade() : slide({ direction: "from-bottom" })}
+              presentation={i === 0 ? fade() : slide({ direction: i % 2 ? "from-right" : "from-bottom" })}
               timing={linearTiming({ durationInFrames: TRANSITION })}
             />,
           );
