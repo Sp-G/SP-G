@@ -113,3 +113,60 @@ def test_end_to_end(sample, tmp_path):
         expected = sum(min(c.end + 0.6, 20) - c.start for c in clips)
         assert info.has_audio and abs(info.duration - expected) < 2.5
         assert (info.width, info.height) == ((1920, 1080) if fmt.startswith("16") else (1080, 1920))
+
+
+def test_scene_cuts_and_snap(tmp_path):
+    from motivecut.pipeline import Source, snap_to_scenes
+    from motivecut.subtitles import Cue
+    from motivecut.video import scene_cuts
+
+    video = tmp_path / "cuts.mp4"
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "color=red:size=320x180:rate=25:duration=3",
+         "-f", "lavfi", "-i", "testsrc=size=320x180:rate=25:duration=3",
+         "-f", "lavfi", "-i", "color=blue:size=320x180:rate=25:duration=3",
+         "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0", "-c:v", "libx264", "-preset", "ultrafast",
+         str(video)],
+        check=True,
+    )
+    cuts = scene_cuts(video, 0, 9)
+    assert len(cuts) == 2 and abs(cuts[0] - 3) < 0.1 and abs(cuts[1] - 6) < 0.1
+
+    cues = [Cue(3.5, 5.2, "Фраза во второй сцене")]
+    src = Source(video, video, probe(video), cues)
+    st, en = snap_to_scenes(src, 3.25, 5.8, 3.5, 5.2)
+    assert abs(st - 3.0) < 0.1  # начало — ровно со смены кадра
+    assert abs(en - 5.96) < 0.1  # конец — за кадр до следующей сцены
+
+
+def test_speech_recognition_replaces_subtitles(sample, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import motivecut.transcribe as asr
+
+    calls = []
+
+    class FakeWhisper:
+        def __init__(self, name, device, compute_type):
+            calls.append(name)
+
+        def transcribe(self, path, **kw):
+            segs = [SimpleNamespace(start=4.1, end=6.4, text=" Никогда не сдавайся."),
+                    SimpleNamespace(start=16.0, end=19.0, text=" Боль временна!")]
+            return iter(segs), None
+
+    import faster_whisper
+    monkeypatch.setattr(faster_whisper, "WhisperModel", FakeWhisper)
+    monkeypatch.setattr(asr, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(asr, "_MODELS", {})
+    monkeypatch.setattr(asr, "_gpu_count", lambda: 0)
+
+    video, subs, d = sample
+    # субтитры передаём, но в режиме always они игнорируются — текст берётся из речи
+    sources = load_sources([video], [subs], d, speech="always", whisper_model="small")
+    assert [c.text for c in sources[0].cues] == ["Никогда не сдавайся.", "Боль временна!"]
+    assert sources[0].cues[0].start == pytest.approx(4.1)
+    # повторно — из кэша, модель не грузится
+    load_sources([video], [], d, speech="auto")
+    assert calls == ["small"]

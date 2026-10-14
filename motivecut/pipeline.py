@@ -10,7 +10,8 @@ from typing import Callable
 from . import selector
 from .selector import Clip
 from .subtitles import Cue, Segment, build_segments, load_cues
-from .video import MediaInfo, RenderOptions, add_music, concat, extract_subtitles, probe, render_clip
+from . import transcribe as asr
+from .video import MediaInfo, RenderOptions, add_music, concat, extract_subtitles, probe, render_clip, scene_cuts
 
 VIDEO_EXT = {".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm", ".wmv", ".ts", ".flv", ".mpg", ".mpeg"}
 SUB_EXT = {".srt", ".vtt", ".ass", ".ssa"}
@@ -65,20 +66,34 @@ def load_sources(
     subs: list[Path],
     workdir: Path,
     max_clip: float = 15.0,
+    speech: str = "auto",  # auto | always | never — распознавать ли речь из видео
+    whisper_model: str = "small",
+    language: str | None = None,
+    progress: Progress = _noop,
 ) -> list[Source]:
+    """speech="always": текст берётся из распознанной речи (субтитры не нужны и не мешают);
+    speech="auto": субтитры из файла → встроенные в mkv → распознавание речи."""
     sources: list[Source] = []
     next_id = 0
-    for idx, (video, sub) in enumerate(pair_files(videos, subs)):
+    pairs = [(v, None) for v in videos] if speech == "always" else pair_files(videos, subs)
+    for idx, (video, sub) in enumerate(pairs):
         info = probe(video)
-        if sub is None:
+        if sub is None and speech != "always" and info.subtitle_streams:
             extracted = workdir / f"{_norm(video.stem) or 'video'}_{idx}.srt"
-            if info.subtitle_streams and extract_subtitles(video, extracted):
+            if extract_subtitles(video, extracted):
                 sub = extracted
-            else:
-                raise RuntimeError(f"Нет субтитров для «{video.name}» — загрузите .srt/.vtt/.ass файл.")
+        if sub is None:
+            if speech == "never":
+                raise RuntimeError(f"Нет субтитров для «{video.name}» — загрузите .srt/.vtt/.ass файл "
+                                   "или включите распознавание речи.")
+            if not info.has_audio:
+                raise RuntimeError(f"В «{video.name}» нет звуковой дорожки — распознавать нечего.")
+            part = (idx / len(pairs), 1 / len(pairs))
+            sub = asr.transcribe(video, info.duration, whisper_model, language,
+                                 progress=lambda f, m: progress(part[0] + f * part[1], m))
         cues = load_cues(sub)
         if not cues:
-            raise RuntimeError(f"В файле субтитров «{sub.name}» не найдено ни одной реплики.")
+            raise RuntimeError(f"В «{sub.name}» не найдено ни одной реплики.")
         segs = build_segments(cues, source=len(sources), start_id=next_id, max_len=max_clip)
         next_id += len(segs)
         sources.append(Source(video, sub, info, cues, segs))
@@ -125,6 +140,22 @@ def padded_bounds(src: Source, start: float, end: float, before: float, after: f
     return min(new_start, start), max(new_end, min(end, src.info.duration))
 
 
+def snap_to_scenes(src: Source, start: float, end: float, text_start: float, text_end: float,
+                   reach: float = 1.5) -> tuple[float, float]:
+    """Двигает границы клипа к ближайшей смене кадра, если она рядом и не режет фразу/соседнюю реплику."""
+    prev_end = max((c.end for c in src.cues if c.end <= text_start + 0.01), default=0.0)
+    next_start = min((c.start for c in src.cues if c.start >= text_end - 0.01), default=src.info.duration)
+    lo = max(text_start - reach, prev_end + 0.05, 0.0)
+    hi = min(text_end + reach, next_start - 0.05, src.info.duration)
+    cuts_before = [t for t in scene_cuts(src.video, lo, text_start) if lo <= t <= text_start]
+    cuts_after = [t for t in scene_cuts(src.video, text_end, hi) if text_end <= t <= hi]
+    if cuts_before:
+        start = max(cuts_before)  # начинаем ровно с новой сцены
+    if cuts_after:
+        end = min(cuts_after) - 0.04  # заканчиваем за кадр до следующей сцены
+    return start, max(end, text_end)
+
+
 def render(
     sources: list[Source],
     clips: list[Clip],
@@ -134,6 +165,7 @@ def render(
     pad_after: float = 0.6,
     music: str | Path | None = None,
     music_volume: float = 0.25,
+    snap_scenes: bool = True,
     progress: Progress = _noop,
 ) -> Path:
     if not clips:
@@ -147,6 +179,8 @@ def render(
             progress(i / (len(clips) + 1), f"Нарезка клипа {i + 1} из {len(clips)}")
             src = sources[clip.source]
             st, en = padded_bounds(src, clip.start, clip.end, pad_before, pad_after)
+            if snap_scenes:
+                st, en = snap_to_scenes(src, st, en, clip.start, clip.end)
             part = tmp / f"clip_{i:03}.mp4"
             render_clip(src.video, st, en, part, opts, has_audio=src.info.has_audio, cues=src.cues)
             parts.append(part)

@@ -197,3 +197,16 @@ def add_music(video: str | Path, music: str | Path, out: str | Path, volume: flo
     )
     if r.returncode != 0:
         raise RuntimeError(f"ffmpeg не смог добавить музыку:\n{r.stderr[-2000:]}")
+
+
+def scene_cuts(src: str | Path, t0: float, t1: float, threshold: float = 0.3) -> list[float]:
+    """Находит моменты смены кадра (склейки в фильме) в интервале [t0, t1]."""
+    t0 = max(t0, 0.0)
+    if t1 <= t0:
+        return []
+    r = subprocess.run(
+        [ffmpeg_exe(), "-hide_banner", "-ss", f"{t0:.3f}", "-t", f"{t1 - t0:.3f}", "-i", str(src),
+         "-an", "-sn", "-vf", f"scale=160:-2,select='gt(scene,{threshold})',showinfo", "-f", "null", "-"],
+        capture_output=True, text=True, errors="replace",
+    )
+    return [t0 + float(m) for m in re.findall(r"pts_time:([\d.]+)", r.stderr)]

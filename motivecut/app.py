@@ -11,6 +11,7 @@ import gradio as gr
 
 from .pipeline import SUB_EXT, VIDEO_EXT, FindSettings, Source, find_clips, load_sources, render
 from .selector import Clip
+from .transcribe import CACHE_DIR, LANGUAGES, WHISPER_MODELS
 from .video import FORMATS, RenderOptions
 
 OUTPUT_DIR = Path(os.environ.get("MOTIVECUT_OUTPUT", "output")).resolve()
@@ -19,6 +20,10 @@ METHODS = {
     "Ключевые слова (быстро, офлайн)": "keywords",
     "Смысловой поиск (офлайн, нужен sentence-transformers)": "embeddings",
     "Claude AI (лучшее качество, нужен API-ключ)": "claude",
+}
+SPEECH = {
+    "Субтитры из файла, а если их нет — распознать речь": "auto",
+    "Распознать речь из видео (если субтитры не совпадают или их нет)": "always",
 }
 ORDERS = {
     "Как в фильме (хронологически)": "chronological",
@@ -78,8 +83,8 @@ def _rows(table) -> list[list]:
     return list(table)
 
 
-def on_find(video_files, video_paths, sub_files, sub_paths, theme, method, duration, max_clip, order,
-            api_key, model, progress=gr.Progress()):
+def on_find(video_files, video_paths, sub_files, sub_paths, speech, whisper_model, language, theme, method,
+            duration, max_clip, order, api_key, model, progress=gr.Progress()):
     videos = _paths(video_files, video_paths, VIDEO_EXT)
     subs = _paths(sub_files, sub_paths, SUB_EXT | VIDEO_EXT)
     subs = [s for s in subs if s.suffix.lower() in SUB_EXT]
@@ -87,8 +92,12 @@ def on_find(video_files, video_paths, sub_files, sub_paths, theme, method, durat
         raise gr.Error("Добавьте видео (загрузкой или путём к файлу).")
     progress(0.1, desc="Читаю субтитры и видео")
     try:
-        sources = load_sources(videos, subs, Path(tempfile.mkdtemp(prefix="motivecut_subs_")), max_clip)
-        progress(0.3, desc="Ищу подходящие фрагменты")
+        sources = load_sources(
+            videos, subs, Path(tempfile.mkdtemp(prefix="motivecut_subs_")), max_clip,
+            speech=SPEECH[speech], whisper_model=WHISPER_MODELS[whisper_model], language=LANGUAGES[language],
+            progress=lambda f, m: progress(0.1 + 0.7 * f, desc=m),
+        )
+        progress(0.85, desc="Ищу подходящие фрагменты")
         title, clips = find_clips(
             sources,
             FindSettings(theme=theme, method=METHODS[method], target_duration=duration, max_clip=max_clip,
@@ -98,6 +107,7 @@ def on_find(video_files, video_paths, sub_files, sub_paths, theme, method, durat
         raise gr.Error(str(e)) from e
     total = sum(c.duration for c in clips)
     pairs = "; ".join(f"{s.video.name} ← {s.subtitles.name}" for s in sources)
+    srt_files = [str(s.subtitles) for s in sources]
     status = (
         (f"### {title}\n" if title else "")
         + f"Найдено фрагментов: **{len(clips)}**, общая длина ≈ **{total:.0f} c**.  \n"
@@ -106,10 +116,10 @@ def on_find(video_files, video_paths, sub_files, sub_paths, theme, method, durat
     )
     if not clips:
         status = "Ничего не найдено. Попробуйте описать смысл другими словами или выбрать другой способ поиска."
-    return sources, _table(sources, clips), status
+    return sources, _table(sources, clips), status, srt_files
 
 
-def on_render(sources, table, fmt, burn_subs, fade, normalize, pad_before, pad_after, music, music_volume,
+def on_render(sources, table, fmt, burn_subs, fade, normalize, snap, pad_before, pad_after, music, music_volume,
               progress=gr.Progress()):
     if not sources:
         raise gr.Error("Сначала нажмите «Найти фрагменты».")
@@ -131,7 +141,7 @@ def on_render(sources, table, fmt, burn_subs, fade, normalize, pad_before, pad_a
     out = OUTPUT_DIR / f"motivation_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
     try:
         render(sources, clips, out, opts, pad_before=pad_before, pad_after=pad_after,
-               music=music or None, music_volume=music_volume,
+               music=music or None, music_volume=music_volume, snap_scenes=snap,
                progress=lambda f, m: progress(f, desc=m))
     except Exception as e:  # noqa: BLE001
         raise gr.Error(str(e)) from e
@@ -155,9 +165,17 @@ def build_ui() -> gr.Blocks:
                 gr.Markdown("### 2. Субтитры")
                 sub_files = gr.File(label="Субтитры (.srt, .vtt, .ass)", file_count="multiple", type="filepath")
                 sub_paths = gr.Textbox(
-                    label="…или пути. Если субтитров нет — возьмутся встроенные из mkv",
+                    label="…или пути. Можно не указывать — тогда речь будет распознана из видео",
                     lines=2, placeholder=r"D:\Фильмы\Rocky.srt",
                 )
+        with gr.Group():
+            speech = gr.Radio(list(SPEECH), value=list(SPEECH)[0], label="Откуда брать текст фраз")
+            with gr.Row():
+                whisper_model = gr.Dropdown(list(WHISPER_MODELS), value=list(WHISPER_MODELS)[0],
+                                            label="Модель распознавания речи")
+                language = gr.Dropdown(list(LANGUAGES), value=list(LANGUAGES)[0], label="Язык фильма")
+            gr.Markdown("Распознавание идёт на вашем ПК: фильм 2 часа — примерно 15–40 минут (с видеокартой NVIDIA — "
+                        "в разы быстрее). Результат запоминается, повторно тот же фильм распознаётся мгновенно.")
 
         gr.Markdown("### 3. Смысл ролика")
         theme = gr.Textbox(
@@ -177,6 +195,7 @@ def build_ui() -> gr.Blocks:
 
         find_btn = gr.Button("🔍 Найти фрагменты", variant="primary")
         status = gr.Markdown()
+        srt_out = gr.File(label="Распознанные/использованные субтитры", file_count="multiple")
         table = gr.Dataframe(
             headers=HEADERS,
             datatype=["bool", "number", "str", "str", "str", "str", "str"],
@@ -190,6 +209,7 @@ def build_ui() -> gr.Blocks:
             fmt = gr.Dropdown(list(FORMATS), value=list(FORMATS)[0], label="Формат")
             burn_subs = gr.Checkbox(value=True, label="Вшить субтитры в видео")
             normalize = gr.Checkbox(value=True, label="Выровнять громкость")
+            snap = gr.Checkbox(value=True, label="Резать по смене кадра")
         with gr.Row():
             fade = gr.Slider(0, 1, value=0.25, step=0.05, label="Плавный переход (затемнение), сек")
             pad_before = gr.Slider(0, 2, value=0.25, step=0.05, label="Запас до фразы, сек")
@@ -205,12 +225,13 @@ def build_ui() -> gr.Blocks:
 
         find_btn.click(
             on_find,
-            [video_files, video_paths, sub_files, sub_paths, theme, method, duration, max_clip, order, api_key, model],
-            [sources_state, table, status],
+            [video_files, video_paths, sub_files, sub_paths, speech, whisper_model, language, theme, method,
+             duration, max_clip, order, api_key, model],
+            [sources_state, table, status, srt_out],
         )
         render_btn.click(
             on_render,
-            [sources_state, table, fmt, burn_subs, fade, normalize, pad_before, pad_after, music, music_volume],
+            [sources_state, table, fmt, burn_subs, fade, normalize, snap, pad_before, pad_after, music, music_volume],
             [result_video, result_file, result_status],
         )
     return ui
@@ -218,7 +239,7 @@ def build_ui() -> gr.Blocks:
 
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    build_ui().queue().launch(inbrowser=True, server_name="127.0.0.1", allowed_paths=[str(OUTPUT_DIR)])
+    build_ui().queue().launch(inbrowser=True, server_name="127.0.0.1", allowed_paths=[str(OUTPUT_DIR), str(CACHE_DIR)])
 
 
 if __name__ == "__main__":

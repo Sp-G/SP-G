@@ -1,9 +1,10 @@
 @echo off
 cd /d "%~dp0"
 
-if exist .venv\installed.ok goto run
+rem Reinstall dependencies when requirements.txt changes (after an update)
+if exist .venv\installed.ok fc /b requirements.txt .venv\installed.ok >nul 2>nul && goto run
 
-echo === First run: installing MotiveCut (3-10 minutes) ===
+echo === Installing MotiveCut components (3-10 minutes) ===
 if not exist .venv\Scripts\python.exe (
     where py >nul 2>nul && py -3 -m venv .venv
     if not exist .venv\Scripts\python.exe python -m venv .venv
@@ -23,7 +24,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo ok> .venv\installed.ok
+copy /y requirements.txt .venv\installed.ok >nul
 
 :run
 chcp 65001 >nul

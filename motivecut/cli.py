@@ -16,6 +16,11 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Автоматическая мотивационная нарезка из фильмов")
     p.add_argument("--video", nargs="+", required=True, help="видеофайлы")
     p.add_argument("--subs", nargs="*", default=[], help="файлы субтитров (.srt/.vtt/.ass)")
+    p.add_argument("--speech", choices=["auto", "always", "never"], default="auto",
+                   help="always — распознать речь из видео (если субтитры не совпадают); auto — если субтитров нет")
+    p.add_argument("--whisper-model", default="small", help="base / small / medium / large-v3-turbo")
+    p.add_argument("--language", default=None, help="язык фильма: ru, en… (по умолчанию — автоопределение)")
+    p.add_argument("--no-snap", action="store_true", help="не подгонять границы клипов к смене кадра")
     p.add_argument("--theme", required=True, help="общий смысл ролика")
     p.add_argument("-o", "--out", default="output/motivation.mp4")
     p.add_argument("--method", choices=["keywords", "embeddings", "claude"], default="keywords")
@@ -30,7 +35,11 @@ def main(argv: list[str] | None = None) -> None:
     a = p.parse_args(argv)
 
     workdir = Path(tempfile.mkdtemp(prefix="motivecut_subs_"))
-    sources = load_sources([Path(v) for v in a.video], [Path(s) for s in a.subs], workdir, a.max_clip)
+    sources = load_sources([Path(v) for v in a.video], [Path(s) for s in a.subs], workdir, a.max_clip,
+                           speech=a.speech, whisper_model=a.whisper_model, language=a.language,
+                           progress=lambda f, m: print(f"[{f * 100:3.0f}%] {m}", flush=True))
+    for s in sources:
+        print(f"Текст для «{s.video.name}»: {s.subtitles}")
     title, clips = find_clips(
         sources,
         FindSettings(theme=a.theme, method=a.method, target_duration=a.duration, max_clip=a.max_clip, order=a.order),
@@ -47,7 +56,7 @@ def main(argv: list[str] | None = None) -> None:
     if a.dry_run or not clips:
         return
     opts = RenderOptions(format=a.format, burn_subs=a.burn_subs)
-    out = render(sources, clips, a.out, opts, music=a.music, music_volume=a.music_volume,
+    out = render(sources, clips, a.out, opts, music=a.music, music_volume=a.music_volume, snap_scenes=not a.no_snap,
                  progress=lambda f, m: print(f"[{f * 100:3.0f}%] {m}"))
     print(f"Готово: {out.resolve()}")
 

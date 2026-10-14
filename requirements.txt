@@ -1,5 +1,6 @@
 gradio>=5.0
 imageio-ffmpeg>=0.5   # запасной ffmpeg, если он не установлен в системе
 anthropic>=1.13       # для режима «Claude AI»
+faster-whisper>=1.1   # распознавание речи из видео (Whisper, работает локально)
 # Для смыслового офлайн-поиска (тяжёлый, ~1-2 ГБ с PyTorch) раскомментируйте:
 # sentence-transformers>=3.0
